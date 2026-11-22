@@ -16,6 +16,7 @@
 body {
     display: grid;
     grid-template-columns: clamp(15rem, 23.65vw, 25rem) minmax(0, 1fr);
+    grid-template-rows: minmax(100vh, 1fr);
     min-height: 100vh;
     margin: 0;
     color: var(--text);
