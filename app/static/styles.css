@@ -426,6 +426,8 @@ h1 {
 .task-dates { margin-top: .35rem; overflow-wrap: anywhere; }
 .task-indicators { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .4rem; font-size: .875rem; }
 .urgency-label, .importance-label { color: var(--muted); }
+[data-level="low"] { color: #55cc8b; }
+[data-level="medium"] { color: #e8c547; }
 [data-level="high"], [data-state="soon"] { color: #e58b31; }
 [data-level="critical"], [data-state="urgent"], [data-state="overdue"] { color: #ff596e; }
 .time-budget { margin-top: .35rem; }
@@ -446,8 +448,6 @@ h1 {
 .time-progress::-moz-progress-bar { background: currentColor; }
 .time-progress[data-state="soon"] { color: #e58b31; }
 .time-progress[data-state="urgent"], .time-progress[data-state="overdue"] { color: #ff596e; }
-.deadline-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-.deadline-fields > div { min-width: 0; display: grid; gap: .4rem; }
 .task-dialog input[type="range"] {
     padding: 0;
     border: 0;
@@ -460,8 +460,9 @@ h1 {
     .task-info { align-items: flex-start; gap: .65rem; }
     .task-checkbox { margin-top: .2rem; }
     .task-actions { flex-direction: column; }
-    .deadline-fields { grid-template-columns: minmax(0, 1fr); }
 }
+[data-theme="light"] [data-level="low"] { color: #167743; }
+[data-theme="light"] [data-level="medium"] { color: #876600; }
 [data-theme="light"] [data-level="high"], [data-theme="light"] [data-state="soon"] { color: #98500b; }
 [data-theme="light"] [data-level="critical"],
 [data-theme="light"] [data-state="urgent"],
@@ -853,3 +854,144 @@ h1 {
 [data-theme="light"] .dialog-primary:hover:not(:disabled) { background: #c40824; }
 [data-theme="light"] .retry-button { background: #fce8ec; }
 [data-theme="light"] .retry-button:hover { background: #f7d5dd; }
+
+.datetime-picker {
+    min-width: 0;
+}
+.picker-heading { margin: 0 0 .8rem; font-weight: 600; }
+.calendar-panel { padding: .8rem; border-radius: 1rem; background: var(--background); }
+.calendar-header {
+    display: grid;
+    grid-template-columns: 1fr 2.5rem 2.5rem;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .65rem;
+}
+.calendar-month { text-transform: capitalize; font-weight: 600; }
+.datetime-picker button {
+    border: 0;
+    border-radius: .6rem;
+    color: var(--text);
+    background: transparent;
+    min-height: 2.5rem;
+}
+.calendar-header button { font-size: 1.65rem; line-height: 1; }
+.calendar-weekdays, .calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: .2rem;
+}
+.calendar-weekdays { color: var(--muted); text-align: center; font-size: .8rem; margin-bottom: .35rem; }
+.calendar-days button { min-width: 0; padding: .25rem; font-variant-numeric: tabular-nums; }
+.datetime-picker button:hover:not(:disabled) { background: var(--border); }
+.calendar-days button[aria-current="date"] { box-shadow: inset 0 0 0 1px var(--muted); }
+.calendar-days button[aria-pressed="true"] {
+    color: white;
+    background: var(--accent);
+    box-shadow: none;
+}
+.calendar-days button[aria-pressed="true"]:hover:not(:disabled) { background: #c90920; }
+.datetime-picker button:disabled { opacity: .3; cursor: default; }
+.calendar-days button[aria-pressed="true"]:disabled { opacity: .7; }
+.picker-time {
+    display: grid;
+    gap: .6rem;
+    margin-top: .9rem;
+    font-size: .875rem;
+}
+.picker-clock { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.picker-clock label { display: grid; min-width: 0; gap: .3rem; color: var(--muted); font-size: .875rem; }
+.picker-clock > span { display: none; }
+.task-dialog .picker-clock input {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: .35rem .8rem;
+    border-radius: 2rem;
+    color: var(--text);
+    background: var(--background);
+    border-color: var(--border);
+    font-variant-numeric: tabular-nums;
+}
+.picker-preview {
+    margin: .8rem 0 .5rem;
+    padding: .7rem;
+    border-radius: .6rem;
+    color: var(--text);
+    background: #e5092410;
+    font-size: .875rem;
+    line-height: 1.4;
+}
+.picker-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; }
+.picker-shortcuts button { font-size: .8rem; padding: .4rem .25rem; border: 1px solid var(--border); }
+.picker-shortcuts .picker-clear { color: var(--muted); }
+
+.task-editor {
+    width: min(30rem, calc(100% - 2rem));
+    max-height: calc(100dvh - 2rem);
+    padding: 0;
+    overflow: hidden;
+}
+.task-editor form {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    max-height: calc(100dvh - 2rem - 2px);
+    gap: 0;
+}
+.editor-body {
+    display: grid;
+    gap: .4rem;
+    min-height: 0;
+    overflow-y: auto;
+    padding: .875rem 1rem;
+    scrollbar-gutter: stable;
+}
+.task-editor .dialog-actions {
+    padding: .6rem 1rem;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+}
+.task-editor .dialog-button { min-height: 2.5rem; }
+.task-editor input:not([type="range"]) { min-height: 2.5rem; }
+.task-editor output { display: inline; margin: 0 0 0 .4rem; }
+.task-editor input[type="range"] { min-height: 1.5rem; margin: 0; }
+.task-editor .picker-heading { margin-bottom: .4rem; font-size: .875rem; }
+.task-editor .calendar-panel { padding: .5rem .65rem; }
+.task-editor .calendar-header {
+    grid-template-columns: 1fr 2.125rem 2.125rem;
+    margin-bottom: .3rem;
+}
+.task-editor .calendar-header button { min-height: 2.125rem; }
+.task-editor .calendar-weekdays { margin-bottom: .2rem; }
+.task-editor .calendar-days { gap: .125rem; }
+.task-editor .calendar-days button { min-height: 2rem; padding: .125rem; }
+.task-editor .picker-time { margin-top: .5rem; gap: .25rem; }
+.task-editor .picker-clock label { gap: .2rem; }
+.task-editor .picker-clock input { min-height: 2.375rem; appearance: textfield; }
+.task-editor .picker-clock input::-webkit-inner-spin-button,
+.task-editor .picker-clock input::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+}
+.task-editor .picker-preview { margin: .5rem 0; padding: .5rem .65rem; }
+.task-editor .picker-shortcuts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.task-editor .picker-shortcuts button { min-height: 2.125rem; font-size: .75rem; padding: .3rem .2rem; }
+
+@media (max-width: 520px) {
+    .task-editor .editor-body { padding: .8rem; gap: .6rem; }
+    .task-editor .calendar-days button { min-height: 2.5rem; }
+    .task-editor .calendar-header button { min-height: 2.75rem; }
+    .task-editor .picker-clock input { min-height: 2.75rem; }
+    .task-editor .picker-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .task-editor .picker-shortcuts button { min-height: 2.75rem; font-size: .8rem; }
+    .task-editor .dialog-button { min-height: 2.75rem; }
+    .task-editor .dialog-actions { padding: .65rem .8rem; }
+    .task-editor output { display: block; margin: .2rem 0 0; }
+    .task-editor input[type="range"] { min-height: 2rem; }
+}
+@media (max-width: 520px) {
+    .calendar-panel { padding: .6rem; }
+    .calendar-header { gap: .25rem; }
+    .calendar-month { font-size: .9rem; }
+    .calendar-days { gap: .1rem; }
+    .calendar-days button { min-height: 2.25rem; }
+}

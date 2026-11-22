@@ -32,12 +32,15 @@ let originalDeadline = null;
 let originalDeadlineFields = "";
 let originalImportance = 50;
 let initialImportanceSlider = "50";
+const createPicker = new DateTimePicker(document.querySelector("#create-picker"), "create");
+const editPicker = new DateTimePicker(document.querySelector("#edit-picker"), "edit");
 
-function updateImportance(prefix) {
+function updateImportance(prefix, value) {
     const slider = document.querySelector("#" + prefix + "-importance");
     const output = document.querySelector("#" + prefix + "-importance-value");
-    const importance = TaskTiming.importance(Number(slider.value));
-    output.textContent = slider.value + "/100 · " + importance.label;
+    const current = value ?? Number(slider.value);
+    const importance = TaskTiming.importance(current);
+    output.textContent = current + "/100 · " + importance.label;
     output.dataset.level = importance.level;
     slider.setAttribute("aria-valuetext", output.textContent);
 }
@@ -69,7 +72,7 @@ function readDeadline(prefix) {
         field.setAttribute("aria-invalid", String(Boolean(message)));
     }
     if (message) {
-        date.focus();
+        document.querySelector("#" + prefix + "-picker .picker-hours").focus();
         return undefined;
     }
     return date.value ? value.toISOString() : null;
@@ -162,9 +165,11 @@ function updateControls() {
     createDialog.querySelectorAll("input, button").forEach((control) => {
         control.disabled = writing;
     });
-    editDialog.querySelectorAll('input[type="date"], input[type="time"], input[type="range"]').forEach((control) => {
+    editDialog.querySelectorAll('input[type="range"]').forEach((control) => {
         control.disabled = writing;
     });
+    createPicker.setDisabled(writing);
+    editPicker.setDisabled(writing);
     taskList.querySelectorAll("button, input").forEach((control) => {
         control.disabled = disabled;
     });
@@ -311,6 +316,7 @@ form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!canWrite()) return;
     createForm.reset();
+    createPicker.setValue(null);
     createTitle.value = titleInput.value;
     createInputValue = titleInput.value;
     showTitleError(createTitle, createError);
@@ -370,15 +376,13 @@ taskList.addEventListener("click", (event) => {
         editDialog.dataset.taskId = id;
         editTitle.value = task.title;
         originalDeadline = task.due_at;
-        const fields = task.due_at ? localDateFields(new Date(task.due_at)).split("T") : ["", ""];
-        document.querySelector("#edit-date").value = fields[0];
-        document.querySelector("#edit-time").value = fields[1];
+        editPicker.setValue(task.due_at);
         originalDeadlineFields = deadlineFields("edit");
         document.querySelector("#edit-due-error").hidden = true;
         document.querySelector("#edit-importance").value = task.importance;
         originalImportance = task.importance;
         initialImportanceSlider = document.querySelector("#edit-importance").value;
-        updateImportance("edit");
+        updateImportance("edit", task.importance);
         showTitleError(editTitle, editError);
         editMessage.textContent = "";
         editDialog.showModal();
