@@ -464,8 +464,9 @@ h1 {
     .task-actions { flex-direction: column; }
 }
 [data-theme="light"] [data-level="low"] { color: #167743; }
-[data-theme="light"] [data-level="medium"] { color: #876600; }
-[data-theme="light"] [data-level="high"], [data-theme="light"] [data-state="soon"] { color: #98500b; }
+[data-theme="light"] [data-level="medium"] { color: #806b00; }
+[data-theme="light"] [data-level="high"] { color: #b84300; }
+[data-theme="light"] [data-state="soon"] { color: #98500b; }
 [data-theme="light"] [data-level="critical"],
 [data-theme="light"] [data-state="urgent"],
 [data-theme="light"] [data-state="overdue"] { color: #b00825; }
