@@ -418,8 +418,8 @@ h1 {
     color: var(--completed);
     background-image: linear-gradient(currentColor, currentColor);
     background-repeat: no-repeat;
-    background-size: 100% 1px;
-    background-position: left center;
+    background-size: 100% 2px;
+    background-position: left 65%;
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
 }
