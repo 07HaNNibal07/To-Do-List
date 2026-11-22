@@ -1,6 +1,11 @@
 "use strict";
 
 globalThis.TaskTiming = {
+    category(task, now = Date.now()) {
+        if (task.is_completed) return "completed";
+        return now >= Date.parse(task.due_at) ? "uncompleted" : "active";
+    },
+
     urgency(task, now = Date.now()) {
         const created = Date.parse(task.created_at);
         const due = Date.parse(task.due_at);
@@ -13,13 +18,14 @@ globalThis.TaskTiming = {
         }
         let state = "enough";
         let label = "Времени достаточно";
-        if (task.is_completed) {
+        const category = this.category(task, now);
+        if (category === "completed") {
             state = "completed";
             label = "Выполнено";
         } else if (!hasDeadline) {
             state = "none";
             label = "Без срока";
-        } else if (now >= due) {
+        } else if (category === "uncompleted") {
             state = "overdue";
             const minutes = Math.floor((now - due) / 60000);
             const days = Math.floor(minutes / 1440);

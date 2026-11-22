@@ -99,8 +99,8 @@ button:focus-visible, input:focus-visible {
 }
 
 .filters {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, max-content));
+    display: flex;
+    flex-wrap: wrap;
     gap: .5rem;
     margin-bottom: 1.25rem;
 }
@@ -111,7 +111,7 @@ button:focus-visible, input:focus-visible {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: clamp(.5rem, 1.5vw, 1.55rem);
-    width: 100%;
+    width: auto;
     min-height: 2.75rem;
     padding: .5rem .85rem;
     overflow: hidden;
@@ -196,7 +196,7 @@ h1 {
 
 .summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, auto));
+    grid-template-columns: repeat(4, minmax(0, auto));
     gap: clamp(.45rem, 1.16vw, 1.2rem);
     max-width: 100%;
     margin: 0;
@@ -366,6 +366,8 @@ h1 {
 }
 
 .task-card:hover::before, .task-card:focus-within::before { opacity: 1; }
+.task-card[data-category="uncompleted"] { border-color: #833346; }
+.task-card[data-category="uncompleted"]::before { opacity: 1; }
 
 .task-info {
     display: flex;
@@ -615,6 +617,17 @@ h1 {
     border-radius: 50%;
 }
 
+.icon-cross { color: #ff354c; }
+.icon-cross::before, .icon-cross::after {
+    content: "";
+    inset: 46% 5% auto;
+    height: .1em;
+    background: currentColor;
+    border-radius: .1em;
+    transform: rotate(45deg);
+}
+.icon-cross::after { transform: rotate(-45deg); }
+
 .icon-clock::before {
     content: "";
     top: 15%;
@@ -724,12 +737,14 @@ h1 {
     .app-header { padding-inline: 1rem; }
 
     .filters {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: .45rem;
         padding: 0;
     }
 
     .filter {
+        width: 100%;
         min-height: 3rem;
         padding: .4rem .55rem;
         border-radius: .75rem;
@@ -746,7 +761,7 @@ h1 {
 
     .summary {
         width: 100%;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .task-form { grid-template-columns: minmax(0, 1fr); }

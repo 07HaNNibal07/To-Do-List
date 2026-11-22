@@ -92,6 +92,9 @@ function updateTaskTiming(card, task, now) {
     if (task.completed_at) dates.push("Завершена · " + dateFormatter.format(new Date(task.completed_at)));
     card.querySelector(".task-dates").textContent = dates.join(" · ");
     const urgency = TaskTiming.urgency(task, now);
+    card.dataset.category = TaskTiming.category(task, now);
+    const uncompleted = card.dataset.category === "uncompleted";
+    card.querySelector(".task-checkbox").hidden = uncompleted;
     const label = card.querySelector(".urgency-label");
     label.textContent = urgency.label;
     label.dataset.state = urgency.state;
@@ -113,6 +116,17 @@ function updateTaskTiming(card, task, now) {
 
 function refreshTiming() {
     const now = Date.now();
+    const visibleIds = visibleTasks(now).map((task) => String(task.id));
+    const cards = [...taskList.children];
+    if (visibleIds.length !== cards.length || cards.some((card, index) => card.dataset.taskId !== visibleIds[index])) {
+        const focused = document.activeElement;
+        const card = focused.closest(".task-card");
+        const controlClass = [...focused.classList].find((name) => ["task-checkbox", "edit-button", "delete-button"].includes(name));
+        render(now, false);
+        if (card) restoreTaskFocus(card.dataset.taskId, controlClass);
+        return;
+    }
+    updateCounts(now);
     for (const card of taskList.children) {
         const task = tasks.find((item) => item.id === Number(card.dataset.taskId));
         if (task) updateTaskTiming(card, task, now);
@@ -123,13 +137,32 @@ const emptyMessages = {
     all: "Задач пока нет. Добавьте первую.",
     active: "Нет активных задач.",
     completed: "Нет выполненных задач.",
+    uncompleted: "Нет невыполненных задач.",
 };
 
 let tasks = [];
 let selectedFilter = "all";
+try {
+    const savedFilter = localStorage.getItem("crimson-filter");
+    if (filterButtons.some((button) => button.dataset.filter === savedFilter)) {
+        selectedFilter = savedFilter;
+    }
+} catch {
+    // Keep filters usable when browser storage is unavailable.
+}
 let loadState = "loading";
 let hasSnapshot = false;
 let writing = false;
+let deadlineTimer;
+
+function selectFilter(filter) {
+    selectedFilter = filter;
+    try {
+        localStorage.setItem("crimson-filter", filter);
+    } catch {
+        // The selected filter still applies for the current page.
+    }
+}
 
 class ApiError extends Error {
     constructor(status) {
@@ -156,20 +189,22 @@ function canWrite() {
     return loadState === "ready" && !writing;
 }
 
-function updateControls() {
+function updateControls(updateEditors = true) {
     const disabled = !canWrite();
     addButton.disabled = disabled;
-    editSave.disabled = disabled;
-    editCancel.disabled = writing;
-    editTitle.readOnly = writing;
-    createDialog.querySelectorAll("input, button").forEach((control) => {
-        control.disabled = writing;
-    });
-    editDialog.querySelectorAll('input[type="range"]').forEach((control) => {
-        control.disabled = writing;
-    });
-    createPicker.setDisabled(writing);
-    editPicker.setDisabled(writing);
+    if (updateEditors) {
+        editSave.disabled = disabled;
+        editCancel.disabled = writing;
+        editTitle.readOnly = writing;
+        createDialog.querySelectorAll("input, button").forEach((control) => {
+            control.disabled = writing;
+        });
+        editDialog.querySelectorAll('input[type="range"]').forEach((control) => {
+            control.disabled = writing;
+        });
+        createPicker.setDisabled(writing);
+        editPicker.setDisabled(writing);
+    }
     taskList.querySelectorAll("button, input").forEach((control) => {
         control.disabled = disabled;
     });
@@ -206,26 +241,37 @@ function replaceTask(updated) {
     tasks = tasks.map((task) => task.id === updated.id ? updated : task);
 }
 
-function visibleTasks() {
+function visibleTasks(now = Date.now()) {
     return tasks
         .filter((task) => selectedFilter === "all"
-            || task.is_completed === (selectedFilter === "completed"))
+            || TaskTiming.category(task, now) === selectedFilter)
         .sort((left, right) => Number(left.is_completed) - Number(right.is_completed)
             || right.id - left.id);
 }
 
-function render() {
-    const completed = tasks.filter((task) => task.is_completed).length;
-    const counts = { all: tasks.length, active: tasks.length - completed, completed };
-
+function updateCounts(now) {
+    const counts = { all: tasks.length, active: 0, completed: 0, uncompleted: 0 };
+    for (const task of tasks) counts[TaskTiming.category(task, now)]++;
     for (const counter of counters) {
         counter.textContent = hasSnapshot ? counts[counter.dataset.count] : "—";
     }
+    clearTimeout(deadlineTimer);
+    const deadlines = tasks
+        .filter((task) => task.due_at && TaskTiming.category(task, now) === "active")
+        .map((task) => Date.parse(task.due_at));
+    if (deadlines.length) {
+        const delay = Math.max(1, Math.min(Math.min(...deadlines) - now, 2147483647));
+        deadlineTimer = setTimeout(refreshTiming, delay);
+    }
+}
+
+function render(now = Date.now(), updateEditors = true) {
+    updateCounts(now);
     for (const button of filterButtons) {
         button.setAttribute("aria-pressed", String(button.dataset.filter === selectedFilter));
     }
 
-    const visible = visibleTasks();
+    const visible = visibleTasks(now);
     const cards = document.createDocumentFragment();
     for (const task of visible) {
         const card = taskTemplate.content.firstElementChild.cloneNode(true);
@@ -238,7 +284,7 @@ function render() {
         checkbox.setAttribute("aria-labelledby", name.id);
         card.querySelector(".edit-button").setAttribute("aria-label", "Изменить название задачи «" + task.title + "»");
         card.querySelector(".delete-button").setAttribute("aria-label", "Удалить задачу «" + task.title + "»");
-        updateTaskTiming(card, task, Date.now());
+        updateTaskTiming(card, task, now);
         cards.append(card);
     }
     taskList.replaceChildren(cards);
@@ -252,7 +298,7 @@ function render() {
     } else {
         listMessage.textContent = emptyMessages[tasks.length === 0 ? "all" : selectedFilter];
     }
-    updateControls();
+    updateControls(updateEditors);
 }
 
 async function loadTasks() {
@@ -273,7 +319,7 @@ function restoreTaskFocus(taskId, controlClass, force = false) {
         return;
     }
     const control = taskList.querySelector('[data-task-id="' + taskId + '"] .' + controlClass);
-    if (control && !control.disabled) {
+    if (control && !control.disabled && !control.hidden) {
         control.focus();
     } else if (!retryButton.hidden) {
         retryButton.focus();
@@ -331,7 +377,7 @@ editTitle.addEventListener("input", () => showTitleError(editTitle, editError));
 
 for (const button of filterButtons) {
     button.addEventListener("click", () => {
-        selectedFilter = button.dataset.filter;
+        selectFilter(button.dataset.filter);
         render();
     });
 }
@@ -350,6 +396,12 @@ taskList.addEventListener("change", async (event) => {
         return;
     }
     const id = Number(checkbox.closest(".task-card").dataset.taskId);
+    const task = tasks.find((item) => item.id === id);
+    if (TaskTiming.category(task) === "uncompleted") {
+        checkbox.checked = task.is_completed;
+        refreshTiming();
+        return;
+    }
     const isCompleted = checkbox.checked;
     const hadFocus = document.activeElement === checkbox;
     checkbox.checked = !isCompleted;
@@ -480,7 +532,7 @@ createForm.addEventListener("submit", async (event) => {
         applyResult(task) {
             tasks.push(task);
             if (titleInput.value === createInputValue) titleInput.value = "";
-            if (selectedFilter === "completed") selectedFilter = "active";
+            if (selectedFilter !== "all") selectFilter("active");
         },
     });
     if (saved) createDialog.close();

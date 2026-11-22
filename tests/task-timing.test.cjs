@@ -53,3 +53,26 @@ test("Importance boundaries", () => {
         assert.equal(TaskTiming.importance(value).level, level);
     }
 });
+
+test("Categories are mutually exclusive and include the deadline boundary", () => {
+    assert.equal(TaskTiming.category(task, start), "active");
+    assert.equal(TaskTiming.category({ ...task, due_at: null }, start + duration * 2), "active");
+    assert.equal(TaskTiming.category(task, start + duration - 1), "active");
+    assert.equal(TaskTiming.category(task, start + duration), "uncompleted");
+    assert.equal(TaskTiming.category(task, start + duration + 1), "uncompleted");
+    assert.equal(TaskTiming.category({ ...task, is_completed: true }, start + duration * 2), "completed");
+});
+
+test("Completion, reopening and extending a deadline recompute the category", () => {
+    const now = start + duration * 2;
+    const overdue = { ...task };
+    assert.equal(TaskTiming.category(overdue, now), "uncompleted");
+    overdue.is_completed = true;
+    overdue.completed_at = new Date(now).toISOString();
+    assert.equal(TaskTiming.category(overdue, now), "completed");
+    overdue.is_completed = false;
+    overdue.completed_at = null;
+    assert.equal(TaskTiming.category(overdue, now), "uncompleted");
+    overdue.due_at = new Date(now + 3600000).toISOString();
+    assert.equal(TaskTiming.category(overdue, now), "active");
+});
