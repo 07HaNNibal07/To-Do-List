@@ -45,16 +45,21 @@ button:focus-visible, input:focus-visible {
 }
 
 .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
     min-width: 0;
-    margin: 0 2rem;
-    padding: .75rem 0;
+    padding: .75rem 2rem;
     border-bottom: 1px solid #393740;
+    background: #101014;
 }
 
 .brand {
     display: flex;
     align-items: center;
     margin: 0;
+    min-width: 0;
 }
 
 .brand-logo {
@@ -62,7 +67,35 @@ button:focus-visible, input:focus-visible {
     width: 100%;
     max-width: 15rem;
     height: auto;
-    mix-blend-mode: screen;
+}
+
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    gap: .5rem;
+    min-height: 2.75rem;
+    padding: .5rem .85rem;
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    color: var(--text);
+    background: var(--card);
+}
+
+.theme-toggle:hover { border-color: var(--muted); }
+
+.theme-symbol { font-size: 1.35rem; line-height: 1; }
+
+@media (max-width: 520px) {
+    .theme-toggle { width: 2.75rem; padding: .5rem; }
+    #theme-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
 }
 
 .filters {
@@ -379,10 +412,60 @@ h1 {
     transform: rotate(-45deg);
 }
 
-.task-checkbox:checked + .task-name {
+.task-checkbox:checked + .task-content .task-name {
     color: var(--completed);
     text-decoration: line-through;
 }
+
+.task-content { min-width: 0; flex: 1; }
+.task-dates, .time-caption {
+    color: var(--muted);
+    font-size: .875rem;
+    line-height: 1.5;
+}
+.task-dates { margin-top: .35rem; overflow-wrap: anywhere; }
+.task-indicators { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .4rem; font-size: .875rem; }
+.urgency-label, .importance-label { color: var(--muted); }
+[data-level="high"], [data-state="soon"] { color: #e58b31; }
+[data-level="critical"], [data-state="urgent"], [data-state="overdue"] { color: #ff596e; }
+.time-budget { margin-top: .35rem; }
+.time-progress {
+    display: block;
+    width: 100%;
+    height: .25rem;
+    margin-top: .25rem;
+    border: 0;
+    border-radius: 1rem;
+    overflow: hidden;
+    appearance: none;
+    color: var(--muted);
+    background: var(--border);
+}
+.time-progress::-webkit-progress-bar { background: var(--border); }
+.time-progress::-webkit-progress-value { background: currentColor; }
+.time-progress::-moz-progress-bar { background: currentColor; }
+.time-progress[data-state="soon"] { color: #e58b31; }
+.time-progress[data-state="urgent"], .time-progress[data-state="overdue"] { color: #ff596e; }
+.deadline-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.deadline-fields > div { min-width: 0; display: grid; gap: .4rem; }
+.task-dialog input[type="range"] {
+    padding: 0;
+    border: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+.task-dialog output { display: block; font-size: .875rem; margin-top: .25rem; }
+@media (max-width: 520px) {
+    .task-card { align-items: flex-start; }
+    .task-info { align-items: flex-start; gap: .65rem; }
+    .task-checkbox { margin-top: .2rem; }
+    .task-actions { flex-direction: column; }
+    .deadline-fields { grid-template-columns: minmax(0, 1fr); }
+}
+[data-theme="light"] [data-level="high"], [data-theme="light"] [data-state="soon"] { color: #98500b; }
+[data-theme="light"] [data-level="critical"],
+[data-theme="light"] [data-state="urgent"],
+[data-theme="light"] [data-state="overdue"] { color: #b00825; }
 
 .task-actions {
     display: flex;
@@ -637,7 +720,7 @@ h1 {
 }
 
 @media (max-width: 768px) {
-    .app-header { margin: 0 1rem; }
+    .app-header { padding-inline: 1rem; }
 
     .filters {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -701,3 +784,72 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; }
 }
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --background: #f5f5f8;
+    --card: #ffffff;
+    --text: #22232c;
+    --muted: #60616f;
+    --completed: #6f707d;
+    --border: #dcdce5;
+    --focus: #b80822;
+}
+
+[data-theme="light"] body {
+    background:
+        radial-gradient(ellipse at 102% 110%, #f4dce2 0, transparent 25%),
+        linear-gradient(144deg, #fafafd, var(--background) 62%, #f0f0f5);
+}
+
+[data-theme="light"] h1 { color: var(--text); }
+[data-theme="light"] .stat,
+[data-theme="light"] .task-card,
+[data-theme="light"] .list-state {
+    background: var(--card);
+    box-shadow: 0 2px 8px #20203005;
+}
+[data-theme="light"] .task-field {
+    border-color: #bcbcc9;
+    background: var(--card);
+    box-shadow: none;
+}
+[data-theme="light"] .task-field input::placeholder { color: var(--muted); }
+[data-theme="light"] .filter { background: transparent; }
+[data-theme="light"] .filter:hover { background: #e8e8ef; }
+[data-theme="light"] .filter[aria-pressed="true"] {
+    border-color: #efb1bc;
+    background: #fce8ec;
+}
+[data-theme="light"] .filter-count { background: #e7e7ef; }
+[data-theme="light"] .filter[aria-pressed="true"] .filter-count {
+    background: var(--accent);
+}
+[data-theme="light"] .task-checkbox {
+    border-color: #898997;
+    background: white;
+}
+[data-theme="light"] .task-checkbox:checked {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+[data-theme="light"] .task-card:hover,
+[data-theme="light"] .task-card:focus-within { border-color: #d18090; }
+[data-theme="light"] .edit-button:hover:not(:disabled) { background: #eeeef4; }
+[data-theme="light"] .delete-button { color: #c40824; }
+[data-theme="light"] .form-error,
+[data-theme="light"] .action-message { color: #b00825; }
+[data-theme="light"] .task-dialog { border-color: var(--border); }
+[data-theme="light"] .task-dialog input { border-color: #bcbcc9; }
+[data-theme="light"] .dialog-button {
+    border-color: #bcbcc9;
+    background: #eeeef4;
+}
+[data-theme="light"] .dialog-button:hover:not(:disabled) { background: #dedee8; }
+[data-theme="light"] .dialog-primary {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+[data-theme="light"] .dialog-primary:hover:not(:disabled) { background: #c40824; }
+[data-theme="light"] .retry-button { background: #fce8ec; }
+[data-theme="light"] .retry-button:hover { background: #f7d5dd; }

@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#101014">
     <title>Crimson Tasks</title>
+    <script src="{{ url_for('static', path='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+    <script defer src="{{ url_for('static', path='task-timing.js') }}"></script>
     <script defer src="{{ url_for('static', path='app.js') }}"></script>
 </head>
 <body>
@@ -14,6 +16,10 @@
             <img class="brand-logo" src="{{ url_for('static', path='logo.png') }}"
                 alt="Crimson Tasks" width="2169" height="725">
         </div>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+            <span class="theme-symbol" aria-hidden="true">☀</span>
+            <span id="theme-label">Светлая тема</span>
+        </button>
     </header>
 
     <main class="workspace">
@@ -85,7 +91,18 @@
             <li class="task-card">
                 <div class="task-info">
                     <input class="task-checkbox" type="checkbox">
-                    <span class="task-name"></span>
+                    <div class="task-content">
+                        <span class="task-name"></span>
+                        <div class="task-dates"></div>
+                        <div class="task-indicators">
+                            <span class="urgency-label"></span>
+                            <span class="importance-label"></span>
+                        </div>
+                        <div class="time-budget" hidden>
+                            <span class="time-caption"></span>
+                            <progress class="time-progress" max="100" aria-label="Израсходовано времени"></progress>
+                        </div>
+                    </div>
                 </div>
                 <div class="task-actions">
                     <button class="task-action edit-button" type="button">
@@ -98,13 +115,41 @@
             </li>
         </template>
 
+        <dialog class="task-dialog" id="create-dialog" aria-labelledby="create-heading">
+            <form id="create-form" novalidate>
+                <h2 id="create-heading">Новая задача</h2>
+                <label for="create-title">Название задачи</label>
+                <input id="create-title" type="text" autocomplete="off" autofocus aria-describedby="create-error">
+                <p class="form-error" id="create-error" role="alert" hidden></p>
+                <div class="deadline-fields">
+                    <div><label for="create-date">Дата дедлайна</label><input id="create-date" type="date"></div>
+                    <div><label for="create-time">Время дедлайна</label><input id="create-time" type="time"></div>
+                </div>
+                <p class="form-error" id="create-due-error" role="alert" hidden></p>
+                <label for="create-importance">Важность задачи <output id="create-importance-value"></output></label>
+                <input id="create-importance" type="range" min="0" max="100" step="5" value="50">
+                <p class="action-message" id="create-message" role="status"></p>
+                <div class="dialog-actions">
+                    <button class="dialog-button" id="create-cancel" type="button">Отмена</button>
+                    <button class="dialog-button dialog-primary" id="create-save" type="submit">Создать задачу</button>
+                </div>
+            </form>
+        </dialog>
+
         <dialog class="task-dialog" id="edit-dialog" aria-labelledby="edit-heading">
             <form id="edit-form" novalidate>
-                <h2 id="edit-heading">Изменить название</h2>
+                <h2 id="edit-heading">Изменить задачу</h2>
                 <label for="edit-title" class="visually-hidden">Название задачи</label>
                 <input id="edit-title" type="text" required autocomplete="off" autofocus
                     aria-describedby="edit-error">
                 <p class="form-error" id="edit-error" role="alert" hidden></p>
+                <div class="deadline-fields">
+                    <div><label for="edit-date">Дата дедлайна</label><input id="edit-date" type="date"></div>
+                    <div><label for="edit-time">Время дедлайна</label><input id="edit-time" type="time"></div>
+                </div>
+                <p class="form-error" id="edit-due-error" role="alert" hidden></p>
+                <label for="edit-importance">Важность задачи <output id="edit-importance-value"></output></label>
+                <input id="edit-importance" type="range" min="0" max="100" step="5" value="50">
                 <p class="action-message" id="edit-message" role="status"></p>
                 <div class="dialog-actions">
                     <button class="dialog-button" id="edit-cancel" type="button">Отмена</button>

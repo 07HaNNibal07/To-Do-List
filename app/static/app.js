@@ -22,6 +22,99 @@ const editSave = document.querySelector("#edit-save");
 const editCancel = document.querySelector("#edit-cancel");
 const deleteDialog = document.querySelector("#delete-dialog");
 const deleteName = document.querySelector("#delete-name");
+const createDialog = document.querySelector("#create-dialog");
+const createForm = document.querySelector("#create-form");
+const createTitle = document.querySelector("#create-title");
+const createError = document.querySelector("#create-error");
+const createMessage = document.querySelector("#create-message");
+let createInputValue = "";
+let originalDeadline = null;
+let originalDeadlineFields = "";
+let originalImportance = 50;
+let initialImportanceSlider = "50";
+
+function updateImportance(prefix) {
+    const slider = document.querySelector("#" + prefix + "-importance");
+    const output = document.querySelector("#" + prefix + "-importance-value");
+    const importance = TaskTiming.importance(Number(slider.value));
+    output.textContent = slider.value + "/100 · " + importance.label;
+    output.dataset.level = importance.level;
+    slider.setAttribute("aria-valuetext", output.textContent);
+}
+
+function deadlineFields(prefix) {
+    return document.querySelector("#" + prefix + "-date").value + "T"
+        + document.querySelector("#" + prefix + "-time").value;
+}
+
+function readDeadline(prefix) {
+    const date = document.querySelector("#" + prefix + "-date");
+    const time = document.querySelector("#" + prefix + "-time");
+    const error = document.querySelector("#" + prefix + "-due-error");
+    const value = new Date(deadlineFields(prefix));
+    let message = "";
+    if (date.value || time.value) {
+        if (!date.value || !time.value || !Number.isFinite(value.getTime())) {
+            message = "Укажите дату и время дедлайна.";
+        } else if (localDateFields(value) !== deadlineFields(prefix)) {
+            message = "Это местное время недоступно. Выберите другое время.";
+        } else if (value.getTime() <= Date.now()) {
+            message = "Дедлайн должен быть позже текущего времени.";
+        }
+    }
+    error.textContent = message;
+    error.hidden = !message;
+    for (const field of [date, time]) {
+        field.setAttribute("aria-describedby", error.id);
+        field.setAttribute("aria-invalid", String(Boolean(message)));
+    }
+    if (message) {
+        date.focus();
+        return undefined;
+    }
+    return date.value ? value.toISOString() : null;
+}
+
+function localDateFields(value) {
+    const pad = (number) => String(number).padStart(2, "0");
+    return value.getFullYear() + "-" + pad(value.getMonth() + 1) + "-" + pad(value.getDate())
+        + "T" + pad(value.getHours()) + ":" + pad(value.getMinutes());
+}
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+function updateTaskTiming(card, task, now) {
+    const dates = ["Создана · " + dateFormatter.format(new Date(task.created_at))];
+    dates.push(task.due_at ? "Дедлайн · " + dateFormatter.format(new Date(task.due_at)) : "Без дедлайна");
+    if (task.completed_at) dates.push("Завершена · " + dateFormatter.format(new Date(task.completed_at)));
+    card.querySelector(".task-dates").textContent = dates.join(" · ");
+    const urgency = TaskTiming.urgency(task, now);
+    const label = card.querySelector(".urgency-label");
+    label.textContent = urgency.label;
+    label.dataset.state = urgency.state;
+    const importance = TaskTiming.importance(task.importance);
+    const importanceLabel = card.querySelector(".importance-label");
+    importanceLabel.textContent = "⚑ " + task.importance + "/100 · " + importance.label;
+    importanceLabel.title = "Важность задачи";
+    importanceLabel.setAttribute("aria-label", "Важность · " + importanceLabel.textContent);
+    importanceLabel.dataset.level = importance.level;
+    card.querySelector(".time-budget").hidden = urgency.percent === null;
+    if (urgency.percent !== null) {
+        const percent = Math.floor(urgency.percent);
+        card.querySelector(".time-caption").textContent = "Израсходовано времени · " + percent + "%";
+        const progress = card.querySelector(".time-progress");
+        progress.value = urgency.percent;
+        progress.dataset.state = urgency.state;
+    }
+}
+
+function refreshTiming() {
+    const now = Date.now();
+    for (const card of taskList.children) {
+        const task = tasks.find((item) => item.id === Number(card.dataset.taskId));
+        if (task) updateTaskTiming(card, task, now);
+    }
+}
 
 const emptyMessages = {
     all: "Задач пока нет. Добавьте первую.",
@@ -66,6 +159,12 @@ function updateControls() {
     editSave.disabled = disabled;
     editCancel.disabled = writing;
     editTitle.readOnly = writing;
+    createDialog.querySelectorAll("input, button").forEach((control) => {
+        control.disabled = writing;
+    });
+    editDialog.querySelectorAll('input[type="date"], input[type="time"], input[type="range"]').forEach((control) => {
+        control.disabled = writing;
+    });
     taskList.querySelectorAll("button, input").forEach((control) => {
         control.disabled = disabled;
     });
@@ -134,6 +233,7 @@ function render() {
         checkbox.setAttribute("aria-labelledby", name.id);
         card.querySelector(".edit-button").setAttribute("aria-label", "Изменить название задачи «" + task.title + "»");
         card.querySelector(".delete-button").setAttribute("aria-label", "Удалить задачу «" + task.title + "»");
+        updateTaskTiming(card, task, Date.now());
         cards.append(card);
     }
     taskList.replaceChildren(cards);
@@ -207,40 +307,17 @@ async function writeTask({ url, method, body, failureMessage, applyResult, onInv
     }
 }
 
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!canWrite()) {
-        return;
-    }
-
-    const inputValue = titleInput.value;
-    const title = readTitle(titleInput, titleError);
-    if (title === null) {
-        return;
-    }
-
-    const saved = await writeTask({
-        url: apiUrl,
-        method: "POST",
-        body: { title },
-        failureMessage: "Не удалось добавить задачу.",
-        onInvalid: () => showTitleError(titleInput, titleError, "Введите название от 1 до 200 символов."),
-        applyResult(task) {
-            tasks.push(task);
-            if (titleInput.value === inputValue) {
-                titleInput.value = "";
-            }
-            if (selectedFilter === "completed") {
-                selectedFilter = "active";
-            }
-        },
-    });
-
-    if (saved || !titleError.hidden) {
-        titleInput.focus();
-    } else if (document.activeElement === document.body) {
-        (retryButton.hidden ? titleInput : retryButton).focus();
-    }
+    if (!canWrite()) return;
+    createForm.reset();
+    createTitle.value = titleInput.value;
+    createInputValue = titleInput.value;
+    showTitleError(createTitle, createError);
+    document.querySelector("#create-due-error").hidden = true;
+    createMessage.textContent = "";
+    updateImportance("create");
+    createDialog.showModal();
 });
 
 titleInput.addEventListener("input", () => showTitleError(titleInput, titleError));
@@ -292,6 +369,16 @@ taskList.addEventListener("click", (event) => {
     if (button.matches(".edit-button")) {
         editDialog.dataset.taskId = id;
         editTitle.value = task.title;
+        originalDeadline = task.due_at;
+        const fields = task.due_at ? localDateFields(new Date(task.due_at)).split("T") : ["", ""];
+        document.querySelector("#edit-date").value = fields[0];
+        document.querySelector("#edit-time").value = fields[1];
+        originalDeadlineFields = deadlineFields("edit");
+        document.querySelector("#edit-due-error").hidden = true;
+        document.querySelector("#edit-importance").value = task.importance;
+        originalImportance = task.importance;
+        initialImportanceSlider = document.querySelector("#edit-importance").value;
+        updateImportance("edit");
         showTitleError(editTitle, editError);
         editMessage.textContent = "";
         editDialog.showModal();
@@ -321,13 +408,18 @@ editForm.addEventListener("submit", async (event) => {
         return;
     }
     const id = Number(editDialog.dataset.taskId);
+    const dueAt = deadlineFields("edit") === originalDeadlineFields ? originalDeadline : readDeadline("edit");
+    if (dueAt === undefined) return;
+    const sliderValue = document.querySelector("#edit-importance").value;
+    const changes = { title, importance: sliderValue === initialImportanceSlider ? originalImportance : Number(sliderValue) };
+    if (dueAt !== originalDeadline) changes.due_at = dueAt;
     const saved = await writeTask({
         url: apiUrl + "/" + id,
         method: "PATCH",
-        body: { title },
+        body: changes,
         failureMessage: "Не удалось изменить название задачи.",
         feedback: editMessage,
-        onInvalid: () => showTitleError(editTitle, editError, "Введите название от 1 до 200 символов."),
+        onInvalid: () => { editMessage.textContent = "Проверьте название, дедлайн и важность задачи. Дедлайн должен быть в будущем."; },
         applyResult: replaceTask,
     });
     if (saved) {
@@ -358,4 +450,40 @@ deleteDialog.addEventListener("submit", async (event) => {
     restoreTaskFocus(id, "delete-button");
 });
 
+for (const prefix of ["create", "edit"]) {
+    document.querySelector("#" + prefix + "-importance").addEventListener("input", () => updateImportance(prefix));
+}
+createTitle.addEventListener("input", () => showTitleError(createTitle, createError));
+document.querySelector("#create-cancel").addEventListener("click", () => createDialog.close());
+createDialog.addEventListener("cancel", (event) => {
+    if (writing) event.preventDefault();
+});
+createDialog.addEventListener("close", () => titleInput.focus());
+createForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canWrite()) return;
+    const title = readTitle(createTitle, createError);
+    if (title === null) return;
+    const dueAt = readDeadline("create");
+    if (dueAt === undefined) return;
+    const saved = await writeTask({
+        url: apiUrl,
+        method: "POST",
+        body: { title, due_at: dueAt, importance: Number(document.querySelector("#create-importance").value) },
+        failureMessage: "Не удалось создать задачу.",
+        feedback: createMessage,
+        onInvalid: () => { createMessage.textContent = "Проверьте название, дедлайн и важность задачи. Дедлайн должен быть в будущем."; },
+        applyResult(task) {
+            tasks.push(task);
+            if (titleInput.value === createInputValue) titleInput.value = "";
+            if (selectedFilter === "completed") selectedFilter = "active";
+        },
+    });
+    if (saved) createDialog.close();
+});
+
+setInterval(refreshTiming, 60000);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshTiming();
+});
 loadTasks();
