@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import create_sqlite_engine, initialize_database
 from app.routes import router
+from app.sessions import AnonymousSessionMiddleware
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = APP_DIR.parent / "data" / "tasks.sqlite3"
@@ -28,6 +29,9 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     application = FastAPI(title="Crimson Tasks", lifespan=lifespan)
     application.state.session_factory = sessionmaker(engine, expire_on_commit=False)
+    application.add_middleware(
+        AnonymousSessionMiddleware, session_factory=application.state.session_factory,
+    )
     application.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
     application.include_router(router)
     return application

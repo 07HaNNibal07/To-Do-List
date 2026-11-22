@@ -40,6 +40,14 @@ class Task(Base):
     due_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     importance: Mapped[int] = mapped_column(default=50, server_default="50")
+    owner_id: Mapped[str | None] = mapped_column(String(64), index=True)
+
+
+class AnonymousSession(Base):
+    __tablename__ = "anonymous_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
 
 
 def initialize_database(engine):
@@ -49,6 +57,8 @@ def initialize_database(engine):
         try:
             columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(tasks)")}
             if columns:
+                if "owner_id" not in columns:
+                    connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN owner_id VARCHAR(64)")
                 if "importance" not in columns:
                     connection.exec_driver_sql("ALTER TABLE tasks ADD COLUMN importance INTEGER NOT NULL DEFAULT 50")
                 for name in ("created_at", "due_at", "completed_at"):
@@ -59,6 +69,7 @@ def initialize_database(engine):
                     (utc_now().isoformat(),),
                 )
             Base.metadata.create_all(connection)
+            connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_tasks_owner_id ON tasks (owner_id)")
             connection.commit()
         except BaseException:
             connection.rollback()

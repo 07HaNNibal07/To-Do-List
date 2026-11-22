@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import sqlite3
+import hashlib
+import secrets
 
 import httpx
 import pytest
 
 from app.main import create_app
+from app.sessions import COOKIE_NAME, SESSION_SECONDS
 
 pytestmark = pytest.mark.anyio
 
@@ -16,11 +19,11 @@ def anyio_backend():
 
 
 @asynccontextmanager
-async def running_client(database):
+async def running_client(database, cookies=None, base_url="http://test"):
     app = create_app(database)
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(transport=transport, base_url=base_url, cookies=cookies) as client:
             yield client
 
 
@@ -136,8 +139,9 @@ async def test_data_survives_application_restart(tmp_path):
         response = await client.patch(f"/api/tasks/{task['id']}", json={"title": "Сохранить новое название"})
         assert response.status_code == 200
         task = response.json()
+        cookies = dict(client.cookies)
 
-    async with running_client(database) as client:
+    async with running_client(database, cookies=cookies) as client:
         assert (await client.get("/api/tasks")).json() == [
             {**task, "title": "Сохранить новое название", "is_completed": True},
         ]
@@ -198,7 +202,8 @@ async def test_deadline_edit_removal_and_importance_survive_restart(tmp_path):
         assert changed["created_at"] == task["created_at"]
         assert changed["importance"] == 80
         assert changed["is_completed"] is False
-    async with running_client(database) as client:
+        cookies = dict(client.cookies)
+    async with running_client(database, cookies=cookies) as client:
         assert (await client.get("/api/tasks")).json() == [changed]
         response = await client.patch(f"/api/tasks/{task['id']}", json={"due_at": None})
         assert response.status_code == 200
@@ -232,7 +237,10 @@ async def test_migrates_old_database_without_losing_tasks(tmp_path):
         connection.executemany("INSERT INTO tasks (title, is_completed) VALUES (?, ?)", [("Old active", False), ("Old done", True)])
     before = datetime.now(timezone.utc)
     async with running_client(database) as client:
-        tasks = (await client.get("/api/tasks")).json()
+        assert (await client.get("/api/tasks")).json() == []
+        with sqlite3.connect(database) as connection:
+            connection.row_factory = sqlite3.Row
+            tasks = [dict(row) for row in connection.execute("SELECT * FROM tasks ORDER BY id")]
         assert [(t["id"], t["title"], t["is_completed"]) for t in tasks] == [(1, "Old active", False), (2, "Old done", True)]
         assert tasks[0]["created_at"] == tasks[1]["created_at"]
         for task in tasks:
@@ -240,8 +248,86 @@ async def test_migrates_old_database_without_losing_tasks(tmp_path):
             assert task["due_at"] is None
             assert task["completed_at"] is None
             assert task["importance"] == 50
+            assert task["owner_id"] is None
+            assert (await client.get(f"/api/tasks/{task['id']}")).status_code == 404
+            assert (await client.patch(f"/api/tasks/{task['id']}", json={"title": "Steal"})).status_code == 404
+            assert (await client.delete(f"/api/tasks/{task['id']}")).status_code == 404
     async with running_client(database) as client:
-        assert (await client.get("/api/tasks")).json() == tasks
+        assert (await client.get("/api/tasks")).json() == []
+        with sqlite3.connect(database) as connection:
+            connection.row_factory = sqlite3.Row
+            assert [dict(row) for row in connection.execute("SELECT * FROM tasks ORDER BY id")] == tasks
         new = await client.post("/api/tasks", json={"title": "New"})
         assert new.status_code == 201
         assert new.json()["id"] > 2
+
+
+async def test_two_owners_cannot_read_or_change_each_others_tasks(tmp_path):
+    database = tmp_path / "isolation.sqlite3"
+    async with running_client(database) as first, running_client(database) as second:
+        a = (await first.post("/api/tasks", json={"title": "A"})).json()
+        b = (await second.post("/api/tasks", json={"title": "B"})).json()
+        assert first.cookies[COOKIE_NAME] != second.cookies[COOKIE_NAME]
+        for own, other, own_task, foreign_task in [(first, second, a, b), (second, first, b, a)]:
+            assert (await own.get("/api/tasks")).json() == [own_task]
+            assert (await own.get(f"/api/tasks/{own_task['id']}")).json() == own_task
+            path = f"/api/tasks/{foreign_task['id']}"
+            assert (await own.get(path)).status_code == 404
+            for changes in [{"title": "Steal"}, {"is_completed": True}, {"importance": 100}, {"due_at": None}]:
+                assert (await own.patch(path, json=changes)).status_code == 404
+            assert (await own.delete(path)).status_code == 404
+            assert (await other.get("/api/tasks")).json() == [foreign_task]
+
+
+@pytest.mark.parametrize("base_url,secure", [("http://test", False), ("https://test", True)])
+async def test_cookie_attributes_and_hashed_storage(tmp_path, base_url, secure):
+    database = tmp_path / "cookies.sqlite3"
+    async with running_client(database, base_url=base_url) as client:
+        response = await client.get("/")
+        cookie = response.headers["set-cookie"]
+        assert "HttpOnly" in cookie
+        assert "SameSite=lax" in cookie
+        assert f"Max-Age={SESSION_SECONDS}" in cookie
+        assert ("Secure" in cookie) is secure
+        assert response.headers["cache-control"] == "private, no-store"
+        token = client.cookies[COOKIE_NAME]
+        task = (await client.post("/api/tasks", json={"title": "Private"})).json()
+        assert "owner_id" not in task
+        with sqlite3.connect(database) as connection:
+            stored = connection.execute("SELECT token_hash FROM anonymous_sessions").fetchone()[0]
+            owner = connection.execute("SELECT owner_id FROM tasks").fetchone()[0]
+        assert stored == hashlib.sha256(token.encode()).hexdigest() == owner
+        assert token not in database.read_bytes().decode("latin1")
+        assert "set-cookie" not in (await client.get("/api/tasks")).headers
+
+
+@pytest.mark.parametrize("replacement", [None, "tampered", "unknown-valid-token"])
+async def test_missing_or_forged_cookie_gets_empty_session(tmp_path, replacement):
+    database = tmp_path / "forged.sqlite3"
+    async with running_client(database) as client:
+        task = (await client.post("/api/tasks", json={"title": "Private"})).json()
+        original = dict(client.cookies)
+        forged = secrets.token_urlsafe(32) if replacement == "unknown-valid-token" else replacement
+        headers = {"Cookie": f"{COOKIE_NAME}={forged}"} if forged else {}
+        async with running_client(database) as stranger:
+            response = await stranger.get("/api/tasks", headers=headers)
+            assert response.json() == []
+            assert stranger.cookies[COOKIE_NAME] != original[COOKIE_NAME]
+            assert (await stranger.get(f"/api/tasks/{task['id']}")).status_code == 404
+        assert (await client.get("/api/tasks")).json() == [task]
+
+
+async def test_server_expiration_rejects_even_a_present_cookie(tmp_path):
+    database = tmp_path / "expired.sqlite3"
+    async with running_client(database) as client:
+        task = (await client.post("/api/tasks", json={"title": "Before expiry"})).json()
+        token = client.cookies[COOKIE_NAME]
+        with sqlite3.connect(database) as connection:
+            connection.execute("UPDATE anonymous_sessions SET expires_at = ?", ((datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),))
+        response = await client.get("/api/tasks")
+        assert response.json() == []
+        assert client.cookies[COOKIE_NAME] != token
+        assert (await client.patch(f"/api/tasks/{task['id']}", json={"title": "Steal expired"})).status_code == 404
+        assert (await client.delete(f"/api/tasks/{task['id']}")).status_code == 404
+        with sqlite3.connect(database) as connection:
+            assert connection.execute("SELECT title FROM tasks").fetchone()[0] == "Before expiry"
