@@ -416,7 +416,12 @@ h1 {
 
 .task-checkbox:checked + .task-content .task-name {
     color: var(--completed);
-    text-decoration: line-through;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-size: 100% 1px;
+    background-position: left center;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
 .task-content { min-width: 0; flex: 1; }
