@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints
+from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints, model_validator
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -16,14 +16,24 @@ from app.db import Base, Task, create_sqlite_engine
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = APP_DIR.parent / "data" / "tasks.sqlite3"
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+TaskTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
 class TaskCreate(BaseModel):
-    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    title: TaskTitle
 
 
 class TaskUpdate(BaseModel):
-    is_completed: StrictBool
+    title: TaskTitle | None = None
+    is_completed: StrictBool | None = None
+
+    @model_validator(mode="after")
+    def require_changes(self):
+        if not self.model_fields_set:
+            raise ValueError("Provide title or is_completed")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Task fields cannot be null")
+        return self
 
 
 class TaskRead(BaseModel):
@@ -77,7 +87,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
         statement = (
             update(Task)
             .where(Task.id == task_id)
-            .values(is_completed=data.is_completed)
+            .values(**data.model_dump(exclude_unset=True))
             .returning(Task)
         )
         task = session.scalars(statement).one_or_none()

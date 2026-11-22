@@ -85,6 +85,27 @@ async def test_rejects_non_boolean_status(client, value):
     assert (await client.get("/api/tasks")).json() == [task]
 
 
+async def test_renaming_preserves_completion_and_accepts_combined_patch(client):
+    task = (await client.post("/api/tasks", json={"title": "Исходное название"})).json()
+    path = f"/api/tasks/{task['id']}"
+    response = await client.patch(path, json={"title": "Выполнить", "is_completed": True})
+    assert response.status_code == 200
+    assert response.json() == {**task, "title": "Выполнить", "is_completed": True}
+
+    response = await client.patch(path, json={"title": "  Новое название  "})
+    assert response.status_code == 200
+    assert response.json() == {**task, "title": "Новое название", "is_completed": True}
+    assert (await client.get("/api/tasks")).json() == [response.json()]
+
+
+@pytest.mark.parametrize("changes", [{}, {"title": "   "}, {"title": "я" * 201}, {"title": None, "is_completed": True}])
+async def test_invalid_rename_does_not_write_changes(client, changes):
+    task = (await client.post("/api/tasks", json={"title": "Исходное название"})).json()
+    response = await client.patch(f"/api/tasks/{task['id']}", json=changes)
+    assert response.status_code == 422
+    assert (await client.get("/api/tasks")).json() == [task]
+
+
 async def test_delete_and_missing_task(client):
     task = (await client.post("/api/tasks", json={"title": "Удалить"})).json()
     path = f"/api/tasks/{task['id']}"
@@ -97,6 +118,7 @@ async def test_delete_and_missing_task(client):
     assert replacement["id"] > task["id"]
     assert (await client.delete(path)).status_code == 404
     assert (await client.patch(path, json={"is_completed": True})).status_code == 404
+    assert (await client.patch(path, json={"title": "Новый заголовок"})).status_code == 404
 
 
 async def test_data_survives_application_restart(tmp_path):
@@ -105,6 +127,10 @@ async def test_data_survives_application_restart(tmp_path):
         task = (await client.post("/api/tasks", json={"title": "Сохранить"})).json()
         response = await client.patch(f"/api/tasks/{task['id']}", json={"is_completed": True})
         assert response.status_code == 200
+        response = await client.patch(f"/api/tasks/{task['id']}", json={"title": "Сохранить новое название"})
+        assert response.status_code == 200
 
     async with running_client(database) as client:
-        assert (await client.get("/api/tasks")).json() == [{**task, "is_completed": True}]
+        assert (await client.get("/api/tasks")).json() == [
+            {**task, "title": "Сохранить новое название", "is_completed": True},
+        ]

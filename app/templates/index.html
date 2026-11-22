@@ -9,30 +9,12 @@
     <script defer src="{{ url_for('static', path='app.js') }}"></script>
 </head>
 <body>
-    <aside class="sidebar">
+    <header class="app-header">
         <div class="brand">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span>Crimson <strong>Tasks</strong></span>
+            <img class="brand-logo" src="{{ url_for('static', path='logo.png') }}"
+                alt="Crimson Tasks" width="2169" height="725">
         </div>
-
-        <nav class="filters" aria-label="Фильтры задач">
-            <button type="button" class="filter" data-filter="all" aria-pressed="true">
-                <span class="icon icon-grid" aria-hidden="true"><span></span><span></span></span>
-                <span>Все задачи</span>
-                <span class="filter-count" data-count="all">—</span>
-            </button>
-            <button type="button" class="filter" data-filter="active" aria-pressed="false">
-                <span class="icon icon-clock" aria-hidden="true"></span>
-                <span>Активные</span>
-                <span class="filter-count" data-count="active">—</span>
-            </button>
-            <button type="button" class="filter" data-filter="completed" aria-pressed="false">
-                <span class="icon icon-done" aria-hidden="true"></span>
-                <span>Выполненные</span>
-                <span class="filter-count" data-count="completed">—</span>
-            </button>
-        </nav>
-    </aside>
+    </header>
 
     <main class="workspace">
         <header class="dashboard-header">
@@ -70,6 +52,24 @@
             <p class="form-error" id="title-error" role="alert" hidden></p>
         </form>
 
+        <nav class="filters" aria-label="Фильтры задач">
+            <button type="button" class="filter" data-filter="all" aria-pressed="true">
+                <span class="icon icon-grid" aria-hidden="true"><span></span><span></span></span>
+                <span>Все задачи</span>
+                <span class="filter-count" data-count="all">—</span>
+            </button>
+            <button type="button" class="filter" data-filter="active" aria-pressed="false">
+                <span class="icon icon-clock" aria-hidden="true"></span>
+                <span>Активные</span>
+                <span class="filter-count" data-count="active">—</span>
+            </button>
+            <button type="button" class="filter" data-filter="completed" aria-pressed="false">
+                <span class="icon icon-done" aria-hidden="true"></span>
+                <span>Выполненные</span>
+                <span class="filter-count" data-count="completed">—</span>
+            </button>
+        </nav>
+
         <noscript><p>Для работы со списком задач включите JavaScript.</p></noscript>
 
         <section class="tasks" aria-label="Список задач">
@@ -83,15 +83,46 @@
 
         <template id="task-template">
             <li class="task-card">
-                <label class="task-label">
+                <div class="task-info">
                     <input class="task-checkbox" type="checkbox">
                     <span class="task-name"></span>
-                </label>
-                <button class="delete-button" type="button">
-                    <span class="icon icon-trash" aria-hidden="true"></span>
-                </button>
+                </div>
+                <div class="task-actions">
+                    <button class="task-action edit-button" type="button">
+                        <span class="icon icon-pencil" aria-hidden="true"></span>
+                    </button>
+                    <button class="task-action delete-button" type="button">
+                        <span class="icon icon-trash" aria-hidden="true"></span>
+                    </button>
+                </div>
             </li>
         </template>
+
+        <dialog class="task-dialog" id="edit-dialog" aria-labelledby="edit-heading">
+            <form id="edit-form" novalidate>
+                <h2 id="edit-heading">Изменить название</h2>
+                <label for="edit-title" class="visually-hidden">Название задачи</label>
+                <input id="edit-title" type="text" required autocomplete="off" autofocus
+                    aria-describedby="edit-error">
+                <p class="form-error" id="edit-error" role="alert" hidden></p>
+                <p class="action-message" id="edit-message" role="status"></p>
+                <div class="dialog-actions">
+                    <button class="dialog-button" id="edit-cancel" type="button">Отмена</button>
+                    <button class="dialog-button dialog-primary" id="edit-save" type="submit">Сохранить</button>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog class="task-dialog" id="delete-dialog" aria-labelledby="delete-heading" aria-describedby="delete-name">
+            <form method="dialog">
+                <h2 id="delete-heading">Вы уверены, что хотите удалить задачу?</h2>
+                <p class="dialog-description" id="delete-name"></p>
+                <div class="dialog-actions">
+                    <button class="dialog-button" value="cancel" autofocus>Отмена</button>
+                    <button class="dialog-button dialog-primary" value="delete">Удалить</button>
+                </div>
+            </form>
+        </dialog>
     </main>
 </body>
 </html>
