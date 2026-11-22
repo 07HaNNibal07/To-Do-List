@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints
 from sqlalchemy import delete, select, update
@@ -47,6 +49,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
             engine.dispose()
 
     application = FastAPI(title="Crimson Tasks", lifespan=lifespan)
+    application.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
     def get_session():
         with session_factory() as session:
@@ -54,7 +57,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     DbSession = Annotated[Session, Depends(get_session)]
 
-    @application.get("/", include_in_schema=False)
+    @application.get("/", response_class=HTMLResponse, include_in_schema=False)
     def home(request: Request):
         return templates.TemplateResponse(request=request, name="index.html")
 
