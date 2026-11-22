@@ -66,3 +66,58 @@ uv run --locked --no-dev uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Укажите порт, который выделяет хостинг. За reverse proxy настройте доверенные адреса прокси Uvicorn через `--forwarded-allow-ips`, чтобы приложение корректно определяло HTTPS и устанавливало `Secure` cookie. После развёртывания создайте пробную задачу и проверьте её наличие после перезапуска с той же cookie. Откройте второй независимый браузерный профиль и убедитесь, что его список пуст. HTML и ответы API имеют `Cache-Control: private, no-store`.
+
+## Развёрнутый VPS
+
+Публичный адрес — [Crimson Tasks](https://48.103.117.162/).
+
+- Код расположен в `/opt/crimson-tasks`, исходный коммит — `f9972ef666d2d5b69aa60b4ed8db8706fc7978eb`.
+- SQLite находится в `/var/lib/crimson-tasks/tasks.sqlite3`, права каталога — `0700`, файла — `0600`, владелец — `crimson`.
+- `crimson-tasks.service` запускает Uvicorn от пользователя `crimson` на `127.0.0.1:8000`.
+- `caddy.service` запускает Caddy 2.11.9 от пользователя `caddy`, принимает TCP 80/443 и обновляет IP-сертификат Let’s Encrypt с профилем `shortlived`.
+- Конфигурация прокси находится в `/etc/caddy/Caddyfile`, сертификаты — в `/var/lib/caddy/data`.
+- Обе службы включены в автозапуск. VPN-контейнер `amnezia-awg2` использует UDP 37034. Его время запуска и счётчик перезапусков сохранены при развёртывании.
+
+На VPS отсутствует авторизация в приватном GitHub-репозитории. Для обновления получите изменения на своём компьютере и передайте Git bundle. В PowerShell из каталога проекта выполните команды ниже. Ключ деплоя хранится в локальном `~/.ssh`, его приватная часть остаётся на компьютере.
+
+```powershell
+git pull --ff-only origin main
+git bundle create "$env:TEMP\crimson-tasks-update.bundle" main
+scp -i "$env:USERPROFILE\.ssh\crimson_tasks_vps_ed25519" "$env:TEMP\crimson-tasks-update.bundle" root@48.103.117.162:/opt/crimson-tasks-update.bundle
+ssh -i "$env:USERPROFILE\.ssh\crimson_tasks_vps_ed25519" root@48.103.117.162
+```
+
+В SSH-сессии сначала создайте согласованную резервную копию SQLite.
+
+```bash
+umask 077
+python3 - <<'PY'
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+
+folder = Path('/var/lib/crimson-tasks')
+stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+source = sqlite3.connect(folder / 'tasks.sqlite3')
+backup = sqlite3.connect(folder / f'backup-{stamp}.sqlite3')
+try:
+    source.backup(backup)
+finally:
+    backup.close()
+    source.close()
+PY
+```
+
+Затем обновите код и перезапустите службу приложения. Выполняйте следующую команду только при успешном завершении предыдущей.
+
+```bash
+cd /opt/crimson-tasks
+git fetch /opt/crimson-tasks-update.bundle main
+git merge --ff-only FETCH_HEAD
+UV_CACHE_DIR=/var/cache/crimson-tasks uv sync --locked --no-dev
+systemctl restart crimson-tasks
+systemctl is-active crimson-tasks caddy
+curl --fail --silent --show-error --output /dev/null https://48.103.117.162/
+```
+
+Логи приложения доступны через `journalctl -u crimson-tasks -n 50 --no-pager`, прокси — через `journalctl -u caddy -n 50 --no-pager`. Миграции выполняются приложением при старте, а SQLite остаётся вне Git-репозитория.
