@@ -1,13 +1,97 @@
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.db import Base, Task, create_sqlite_engine
 
 APP_DIR = Path(__file__).resolve().parent
+DEFAULT_DB_PATH = APP_DIR.parent / "data" / "tasks.sqlite3"
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
-app = FastAPI(title="Crimson Tasks")
 
 
-@app.get("/", include_in_schema=False)
-def home(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+class TaskCreate(BaseModel):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class TaskUpdate(BaseModel):
+    is_completed: StrictBool
+
+
+class TaskRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    is_completed: bool
+
+
+def create_app(db_path: Path | None = None) -> FastAPI:
+    database = Path(db_path or os.environ.get("CRIMSON_DB_PATH") or DEFAULT_DB_PATH).resolve()
+    engine = create_sqlite_engine(database)
+    session_factory = sessionmaker(engine, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        database.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            Base.metadata.create_all(engine)
+            yield
+        finally:
+            engine.dispose()
+
+    application = FastAPI(title="Crimson Tasks", lifespan=lifespan)
+
+    def get_session():
+        with session_factory() as session:
+            yield session
+
+    DbSession = Annotated[Session, Depends(get_session)]
+
+    @application.get("/", include_in_schema=False)
+    def home(request: Request):
+        return templates.TemplateResponse(request=request, name="index.html")
+
+    @application.get("/api/tasks", response_model=list[TaskRead])
+    def list_tasks(session: DbSession):
+        return session.scalars(select(Task).order_by(Task.is_completed, Task.id.desc())).all()
+
+    @application.post("/api/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
+    def create_task(data: TaskCreate, session: DbSession):
+        task = Task(title=data.title)
+        session.add(task)
+        session.commit()
+        return task
+
+    @application.patch("/api/tasks/{task_id}", response_model=TaskRead)
+    def update_task(task_id: int, data: TaskUpdate, session: DbSession):
+        statement = (
+            update(Task)
+            .where(Task.id == task_id)
+            .values(is_completed=data.is_completed)
+            .returning(Task)
+        )
+        task = session.scalars(statement).one_or_none()
+        if task is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+        session.commit()
+        return task
+
+    @application.delete("/api/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_task(task_id: int, session: DbSession):
+        statement = delete(Task).where(Task.id == task_id).returning(Task.id)
+        if session.scalars(statement).one_or_none() is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+        session.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    return application
+
+
+app = create_app()
