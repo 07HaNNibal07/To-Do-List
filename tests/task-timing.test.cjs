@@ -49,7 +49,7 @@ test("Timezone offsets and year boundary identify the same instant", () => {
 });
 
 test("Importance boundaries", () => {
-    for (const [value, level] of [[0,"low"], [24,"low"], [25,"medium"], [49,"medium"], [50,"high"], [79,"high"], [80,"critical"], [100,"critical"]]) {
+    for (const [value, level] of [[0,"low"], [24,"low"], [25,"medium"], [49,"medium"], [50,"medium"], [51,"high"], [55,"high"], [79,"high"], [80,"critical"], [100,"critical"]]) {
         assert.equal(TaskTiming.importance(value).level, level);
     }
 });

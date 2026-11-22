@@ -47,7 +47,7 @@ globalThis.TaskTiming = {
 
     importance(value) {
         if (value >= 80) return { label: "Критическая", level: "critical" };
-        if (value >= 50) return { label: "Высокая", level: "high" };
+        if (value > 50) return { label: "Высокая", level: "high" };
         if (value >= 25) return { label: "Средняя", level: "medium" };
         return { label: "Низкая", level: "low" };
     },
